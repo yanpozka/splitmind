@@ -1,12 +1,13 @@
 ---
 title: "Generate PostgreSQL credentials with Hashicorp Vault and Go"
-date: "2022-04-15"
+date: "2022-04-16"
 tags: [
     "go", "golang", "vault", "postgres", "security", "vault"
 ]
 ---
 
-# TLDR
+
+### TLDR
 
 Handling databases credentials manually can be a tedious work and it can also lead to security issues. Let's check how we can generate dynamic username and password pairs for PostgreSQL using the secret manager Vault on a Go REST API, I made a [Github repo](https://github.com/yanpozka/exp/tree/main/pg-vault) if you want to jump straight into code.
 
@@ -31,8 +32,9 @@ This command will do the job:
 # export your own $PG_DBNAME, $PG_USER and $PG_PASSWD environment variables
 
 docker run --rm -d -p 5432:5432 \
-        -e POSTGRES_DB=$PG_DBNAME -e POSTGRES_USER=$PG_USER -e POSTGRES_PASSWORD=$PG_PASSWD \
-        --name pg12 postgres:12-alpine
+  -e POSTGRES_DB=$PG_DBNAME \
+  -e POSTGRES_USER=$PG_USER -e POSTGRES_PASSWORD=$PG_PASSWD \
+  --name pg12 postgres:12-alpine
 ```
 
 Setting up Vault is a little more tricky, first step will be running an actual vault server, again for the sake of simplicity we will run vault in development mode. Follow [these steps](https://learn.hashicorp.com/tutorials/vault/getting-started-install?in=vault/getting-started) to install it on your local machine.
@@ -40,10 +42,8 @@ Setting up Vault is a little more tricky, first step will be running an actual v
 Run the vault server in a terminal session:
 
 ```bash
-# terminal 1
 vault server -dev
-...
-(hidden output here)
+
 ...
 WARNING! dev mode is enabled! In this mode, Vault runs entirely in-memory
 and starts unsealed with a single unseal key. The root token is already
@@ -79,26 +79,26 @@ now we have to configure the `postgresql-database-plugin` with the master creden
 # export your own $PG_DBNAME, $ROLE_NAME, $PG_USER and $PG_PASSWD environment variables
 
 vault write database/config/$PG_DBNAME \
-    plugin_name=postgresql-database-plugin \
-    allowed_roles="$ROLE_NAME" \
-    connection_url="postgresql://{{username}}:{{password}}@0.0.0.0:5432/storedb?sslmode=disable" \
-    username="$PG_USER" password="$PG_PASSWD"
+  plugin_name=postgresql-database-plugin \
+  allowed_roles="$ROLE_NAME" \
+  connection_url="postgresql://{{username}}:{{password}}@0.0.0.0:5432/storedb?sslmode=disable" \
+  username="$PG_USER" password="$PG_PASSWD"
 ```
 
 this is the moment to write a little of SQL, in short we have to create a query to create the role in the database and grant the permissions that this role will be basically the future generated users, I used the same role names in the query and in Vault, we can also add time to life parameters for the roles/users so they are recycled after some time, remember that each time a server instance starts it grabs a new set of username/password:
 
 ```bash
 sql_role="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; \
-        GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"{{name}}\";"
+  GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"{{name}}\";"
 
 # create role for db users
 vault write database/roles/$ROLE_NAME \
-    db_name=$PG_DBNAME \
-    creation_statements="$sql_role" \
-    default_ttl="6h" max_ttl="24h"
+  db_name=$PG_DBNAME \
+  creation_statements="$sql_role" \
+  default_ttl="6h" max_ttl="24h"
 ```
 
-if every has worked fine you'll be able to generate your first username/password from the console line, this step is optional:
+if everything has worked fine you'll be able to generate your first username/password from the console line, this step is optional:
 
 ```bash
 vault read database/creds/$ROLE_NAME
