@@ -1,7 +1,7 @@
 ---
 title: "About"
 description: "Splitmind Yandry's blog"
-date: "2021-10-15"
+date: "2022-04-16"
 aliases: ["about-us", "about-splitmind", "contact"]
 author: "Yandry Pozo"
 ---
